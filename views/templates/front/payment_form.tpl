@@ -11,7 +11,6 @@
         <input type="hidden" id="failure_url" name="failure_url" value="{$failure_url}" required>
         <input type="hidden" id="signed_field_names" name="signed_field_names" value="{$signed_filed_names}" required>
         <input type="hidden" id="signature" name="signature" value="{$signature}" required>
-        <input value="submit" type="submit">
     </form>
     <script>
         document.getElementById('esewa_payment_form').submit();

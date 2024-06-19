@@ -45,12 +45,10 @@ class EsewaPaymentModuleFrontController extends ModuleFrontController
         $cart_id = $this->context->cart->id;
         $customer_id = $this->context->customer->id;
         $transaction_unique_id = $cart_id . '-cid-' . $customer_id . '-cus-' . $this->context->customer->secure_key . '-seckey-' . uniqid();
-        $failure_url = $this->context->link->getModuleLink($this->module->name, 'failure');
+        $failure_url = $this->context->link->getModuleLink($this->module->name, 'failure', array('cart_id' => $cart_id, 'secure_key' => $this->context->customer->secure_key));
         $success_url = $this->context->link->getModuleLink($this->module->name, 'success');
         $signed_filed_names = "total_amount,transaction_uuid,product_code";
         $signature = $this->getEsewaSignature($total_amount, $transaction_unique_id, $product_code, $esewa_merchant_secret);
-
-        $this->savePaymentMetaData($cart_id, $transaction_unique_id);
 
         $this->context->smarty->assign(array(
             'esewa_url' => $esewa_url,
@@ -67,7 +65,25 @@ class EsewaPaymentModuleFrontController extends ModuleFrontController
             'signature' => $signature
         ));
 
-        $this->setTemplate('module:esewa/views/templates/front/payment_form.tpl');
+        $this->module->validateOrder(
+            $cart_id,
+            Configuration::get('PS_CHECKOUT_STATE_PENDING'),
+            $cart->getOrderTotal(),
+            $this->module->displayName,
+            "Paid with eSewa.",
+            array('transaction_id' => null),
+            (int) Context::getContext()->currency->id,
+            false,
+            $this->context->customer->secure_key
+        );
+        $order_id = Order::getOrderByCartId($cart_id);
+        $this->savePaymentMetaData($cart_id, $transaction_unique_id);
+
+        if ($order_id) {
+            $this->setTemplate('module:esewa/views/templates/front/payment_form.tpl');
+        } else {
+            return $this->setTemplate('module:esewa/views/templates/front/payment_failure.tpl');
+        }
     }
 
     private function getEsewaSignature($total_amount, $transaction_unique_id, $product_code, $esewa_merchant_secret)

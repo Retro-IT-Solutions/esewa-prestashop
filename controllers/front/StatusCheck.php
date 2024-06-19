@@ -6,14 +6,16 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
         if ($this->module->active == false) {
             die($this->module->l('This payment method is not available.'));
         }
+        $order_id = Tools::getValue('order_id');
+        $order = new Order($order_id);
 
-        $cart = $this->context->cart;
-        $cart_id = $this->context->cart->id;
         // Get the total amount
-        $total_amount = $this->context->cart->getOrderTotal(true);
-        if ($cart->id_customer == 0 || $cart->id_address_delivery == 0 || $cart->id_address_invoice == 0 || !$this->module->active || $total_amount == 0) {
+        $total_amount = sprintf("%.2f", $order->total_paid);
+        if (!$order_id && !Validate::isLoadedObject($order)) {
             Tools::redirect('order?step=1');
         }
+
+        $cart_id = $order->id_cart;
 
         $db = Db::getInstance();
         $existing_row = $db->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'esewa` WHERE cart_id = ' . (int)$cart_id);
@@ -21,43 +23,49 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
         if ($existing_row) {
             $transaction_uuid = $existing_row['transaction_uuid'];
         } else {
-            return $this->setTemplate('module:esewa/views/templates/front/error.tpl');
+            Tools::redirect($this->context->link->getModuleLink($this->module->name, 'failure'));
+            exit();
+        }
+
+        $customer_id = $this->getCustomerId($transaction_uuid);
+        $customer = new Customer((int) $customer_id);
+
+        if (!$this->isValidOrder($order, $customer)) {
+            $payment_status = Configuration::get('PS_OS_ERROR');
+            $order->setCurrentState($payment_status);
+            $order->update();
+            Tools::redirect($this->context->link->getModuleLink($this->module->name, 'failure'));
+            exit();
         }
 
 
         $transaction_code = $this->esewaPaymentStatusCheckApi($total_amount, $transaction_uuid);
 
         if ($transaction_code !== null) {
+            $esewa_secure_key = $this->getSecureKey($transaction_uuid);
+            $secure_key = $order->secure_key;
             $payment_status = Configuration::get('PS_OS_PAYMENT');
-            $message = "Paid with eSewa.";
-            $module_name = $this->module->displayName;
-            $currency_id = (int) Context::getContext()->currency->id;
-            $secure_key = $this->getSecureKey($transaction_uuid);
-            $this->module->validateOrder(
-                $cart_id,
-                $payment_status,
-                $cart->getOrderTotal(),
-                $module_name,
-                $message,
-                array('transaction_id' => $transaction_code),
-                $currency_id,
-                false,
-                $secure_key
-            );
         } else {
+            $payment_status = Configuration::get('PS_OS_ERROR');
+            $order->setCurrentState($payment_status);
+            $order->update();
             Tools::redirect($this->context->link->getModuleLink($this->module->name, 'failure'));
             exit();
         }
 
-        $customer_id = $this->getCustomerId($transaction_uuid);
-        Context::getContext()->customer = new Customer((int) $customer_id);
-        $order_id = Order::getByCartId((int) $cart_id);
+        $order->setCurrentState($payment_status);
+        $payments = $order->getOrderPayments();
+        if (count($payments) > 0) {
+            $payment = $payments[0];
+            $payment->transaction_id = $transaction_code;
+            $payment->update();
+        }
 
-        if ($order_id && ($secure_key == $secure_key)) {
+        if ($order->update() && ($esewa_secure_key == $secure_key)) {
             /**
              * The order has been placed so we redirect the customer on the confirmation page.
              */
-            Tools::redirect('index.php?controller=order-confirmation&id_cart=' . (int)$cart_id . '&id_module=' . (int)$this->module->id . '&id_order=' . (int)$this->module->currentOrder . '&key=' . $secure_key);
+            Tools::redirect('index.php?controller=order-confirmation&id_cart=' . (int)$cart_id . '&id_module=' . (int)$this->module->id . '&id_order=' . $order_id . '&key=' . $secure_key);
         
         } else {
             /*
@@ -102,6 +110,8 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
 
         // Parse JSON response
         $response_data = json_decode($response, true);
+        // print_r($response_data);
+        // exit;
         if ($response_data['status'] === 'COMPLETE') {
             return $response_data['ref_id'];
         } else {
@@ -123,5 +133,17 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
         $end = strpos($transaction_unique_id, "-cus-");
         $extracted_id = substr($transaction_unique_id, $start + strlen('-cid-'), $end - ($start + strlen('-cid-')));
         return $extracted_id;
+    }
+
+    protected function isValidOrder($order, $customer)
+    {
+        if (!Validate::isLoadedObject($order)) {
+            return false;
+        }
+
+        if (!Validate::isLoadedObject($customer)) {
+            return false;
+        }
+        return true;
     }
 }

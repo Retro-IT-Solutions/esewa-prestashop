@@ -1,0 +1,1 @@
+<a href="{$status_check_url}" id="paymentStatusButton" class="btn btn-primary" style="margin: 10px"><img src="{$esewa_image}" alt="">{$button_text}</a>

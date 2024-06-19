@@ -31,8 +31,8 @@ class Esewa extends PaymentModule
         if (
             !parent::install()
             || !$this->registerHook('paymentOptions')
-            || !$this->registerHook('displayShoppingCart')
-            || !$this->registerHook('displayCheckout')
+            || !$this->registerHook('displayOrderDetail')
+            || !$this->registerHook('displayAdminOrderTop')
         ) {
             return false;
         }
@@ -81,46 +81,63 @@ class Esewa extends PaymentModule
         return [$payment_option];
     }
 
-    public function hookDisplayShoppingCart($params)
+    public function hookDisplayOrderDetail($params)
     {
-        $cart_id = $this->context->cart->id;
+        $order = $params['order'];
+        $order_id = $order->id;
+        $order_status_id = $order->getCurrentState();
+        $cart_id = $order->id_cart;
+        $order_payment_method = $order->payment;
+        
+        if ($order_payment_method !== $this->displayName) {
+            return;
+        }
 
         $db = Db::getInstance();
         $existing_row = $db->getValue('SELECT id_esewa FROM `' . _DB_PREFIX_ . 'esewa` WHERE cart_id = ' . (int)$cart_id);
 
-        if ($existing_row) {
+
+        if ($existing_row && $order_status_id == Configuration::get('PS_CHECKOUT_STATE_PENDING')) {
             $status_check_url = $this->context->link->getModuleLink($this->name, 'StatusCheck');
 
             $this->context->smarty->assign(array(
-                'status_check_url' => $this->l($status_check_url),
+                'status_check_url' => $this->l($status_check_url.'?order_id='.$order_id),
                 'button_text' => $this->l('Payment Check'),
                 'esewa_image' => $this->_path . 'views/img/eSewa_logo.png'
             ));
 
-            return $this->display(__FILE__, 'views/templates/hook/shopping_cart_button.tpl');
+            return $this->display(__FILE__, 'views/templates/hook/status_check_button.tpl');
         }
 
         return;
     }
 
-    public function hookDisplayCheckout($params)
+    public function hookDisplayAdminOrderTop($params)
     {
-        $cart_id = $this->context->cart->id;
+        $order_id = (int)$params['id_order'];
+        $order = new Order($order_id);
+        $order_status_id = $order->getCurrentState();
+        $cart_id = $order->id_cart;
+        $order_payment_method = $order->payment;
 
+        if ($order_payment_method !== $this->displayName) {
+            return;
+        }
+        
         $db = Db::getInstance();
         $existing_row = $db->getValue('SELECT id_esewa FROM `' . _DB_PREFIX_ . 'esewa` WHERE cart_id = ' . (int)$cart_id);
 
-        if ($existing_row) {
-            return $this->context->link->getModuleLink($this->name, 'statusCheck');
-            $status_check_url = $this->context->link->getModuleLink($this->name, 'statusCheck');
+
+        if ($existing_row && $order_status_id == Configuration::get('PS_CHECKOUT_STATE_PENDING')) {
+            $status_check_url = $this->context->link->getModuleLink($this->name, 'StatusCheck');
 
             $this->context->smarty->assign(array(
-                'status_check_url' => $this->l($status_check_url),
+                'status_check_url' => $this->l($status_check_url.'?order_id='.$order_id),
                 'button_text' => $this->l('Payment Check'),
                 'esewa_image' => $this->_path . 'views/img/eSewa_logo.png'
             ));
 
-            return $this->display(__FILE__, 'views/templates/hook/shopping_cart_button.tpl');
+            return $this->display(__FILE__, 'views/templates/hook/status_check_button.tpl');
         }
 
         return;

@@ -31,63 +31,57 @@ class EsewaSuccessModuleFrontController extends ModuleFrontController
         $json_payload = base64_decode($encode_data);
         $transaction_data = json_decode($json_payload, true);
         $cart_id = $this->getCartId($transaction_data['transaction_uuid']);
-        $cart = new Cart((int) $cart_id);
         $customer_id = $this->getCustomerId($transaction_data['transaction_uuid']);
-        $total_amount = $this->context->cart->getOrderTotal(true);
+        $order_id = Order::getOrderByCartId($cart_id);
+        $order = new Order($order_id);
+        $total_amount = sprintf("%.2f", $order->total_paid);
 
-        if ($cart->id_customer == 0 || $cart->id_address_delivery == 0 || $cart->id_address_invoice == 0 || !$this->module->active || $total_amount == 0) {
+        if (!$order_id) {
             Tools::redirect('order?step=1');
         }
 
         if (!$this->isTransactionDataValid($transaction_data, $esewa_merchant_secret, $esewa_product_code, $total_amount)) {
-            $failure_url = $this->context->link->getModuleLink($this->module->name, 'failure');
-            Tools::redirect($failure_url);
-            exit();
+            return $this->setTemplate('module:esewa/views/templates/front/error.tpl');
         }
 
         $transaction_code = $transaction_data['transaction_code'];
         $esewa_secure_key = $this->getSecureKey($transaction_data['transaction_uuid']);
         $total_amount = $transaction_data['total_amount'];
 
-        Context::getContext()->cart = new Cart((int) $cart_id);
         Context::getContext()->customer = new Customer((int) $customer_id);
-        Context::getContext()->language = new Language((int) Context::getContext()->customer->id_lang);
-        Context::getContext()->currency = new Currency((int) Context::getContext()->cart->id_currency);
 
         $secure_key = Context::getContext()->customer->secure_key;
         $customer = new Customer((int) $customer_id);
 
-        if ($this->isValidOrder($cart, $customer, $total_amount)) {
+        if ($this->isValidOrder($order, $customer)) {
             $payment_status = Configuration::get('PS_OS_PAYMENT');
-            $message = "Paid with eSewa.";
         } else {
             $payment_status = Configuration::get('PS_OS_ERROR');
-            $message = 'An error occured while processing payment.';
+            $order->setCurrentState($payment_status);
+            $order->update();
+            return $this->setTemplate('module:esewa/views/templates/front/error.tpl');
         }
 
-        $module_name = $this->module->displayName;
-        $currency_id = (int) Context::getContext()->currency->id;
-        // validate order
-        $this->module->validateOrder($cart_id, $payment_status, $cart->getOrderTotal(), $module_name, $message, array('transaction_id' => $transaction_code), $currency_id, false, $secure_key);
+        // change status
+        $order->setCurrentState($payment_status);
+        $payments = $order->getOrderPayments();
+        if (count($payments) > 0) {
+            $payment = $payments[0];
+            $payment->transaction_id = $transaction_code;
+            $payment->update();
+        }
 
-        // If the order has been validated we try to retrieve it
-        $order_id = Order::getByCartId((int) $cart_id);
-
-        if ($order_id && ($secure_key == $esewa_secure_key)) {
+        if ($order->update() && ($secure_key == $esewa_secure_key)) {
             //The order has been placed so we redirect the customer on the confirmation page.
-            Tools::redirect('index.php?controller=order-confirmation&id_cart=' . (int)$cart_id . '&id_module=' . (int)$this->module->id . '&id_order=' . (int)$this->module->currentOrder . '&key=' . $secure_key);
+            Tools::redirect('index.php?controller=order-confirmation&id_cart=' . (int)$cart_id . '&id_module=' . (int)$this->module->id . '&id_order=' . $order_id . '&key=' . $secure_key);
         } else {
-            /*
-             * An error occured and is shown on a new page.
-             */
             return $this->setTemplate('module:esewa/views/templates/front/error.tpl');
         }
     }
 
-    protected function isValidOrder($cart, $customer, $total_amount)
+    protected function isValidOrder($order, $customer)
     {
-
-        if (!Validate::isLoadedObject($cart)) {
+        if (!Validate::isLoadedObject($order)) {
             return false;
         }
 

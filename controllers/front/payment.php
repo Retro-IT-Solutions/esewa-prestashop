@@ -48,7 +48,7 @@ class EsewaPaymentModuleFrontController extends ModuleFrontController
         $failure_url = $this->context->link->getModuleLink($this->module->name, 'failure', array('cart_id' => $cart_id, 'secure_key' => $this->context->customer->secure_key));
         $success_url = $this->context->link->getModuleLink($this->module->name, 'success');
         $signed_filed_names = "total_amount,transaction_uuid,product_code";
-        $signature = $this->getEsewaSignature($total_amount, $transaction_unique_id, $product_code, $esewa_merchant_secret);
+        $signature = $this->getEsewaSignature(sprintf("%.2f", $total_amount), $transaction_unique_id, $product_code, $esewa_merchant_secret);
 
         $this->context->smarty->assign(array(
             'esewa_url' => $esewa_url,

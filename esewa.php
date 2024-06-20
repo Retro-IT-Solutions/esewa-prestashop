@@ -129,10 +129,11 @@ class Esewa extends PaymentModule
 
 
         if ($existing_row && $order_status_id == Configuration::get('PS_CHECKOUT_STATE_PENDING')) {
-            $status_check_url = $this->context->link->getModuleLink($this->name, 'StatusCheck');
+            $office_link = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+            $status_check_url = $this->context->link->getModuleLink($this->name, 'StatusCheck', array('order_id' => $order_id, 'office' => $office_link));
 
             $this->context->smarty->assign(array(
-                'status_check_url' => $this->l($status_check_url.'?order_id='.$order_id),
+                'status_check_url' => $this->l($status_check_url),
                 'button_text' => $this->l('Payment Check'),
                 'esewa_image' => $this->_path . 'views/img/eSewa_logo.png'
             ));

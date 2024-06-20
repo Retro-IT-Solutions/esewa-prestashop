@@ -7,11 +7,16 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
             die($this->module->l('This payment method is not available.'));
         }
         $order_id = Tools::getValue('order_id');
+        $office = Tools::getValue('office');
         $order = new Order($order_id);
 
         // Get the total amount
         $total_amount = sprintf("%.2f", $order->total_paid);
         if (!$order_id && !Validate::isLoadedObject($order)) {
+            if(isset($office) && !empty($office)) {
+                header("Location:".$office);
+                exit;
+            }
             Tools::redirect('order?step=1');
         }
 
@@ -23,6 +28,10 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
         if ($existing_row) {
             $transaction_uuid = $existing_row['transaction_uuid'];
         } else {
+            if(isset($office) && !empty($office)) {
+                header("Location:".$office);
+                exit;
+            }
             Tools::redirect($this->context->link->getModuleLink($this->module->name, 'failure'));
             exit();
         }
@@ -34,6 +43,10 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
             $payment_status = Configuration::get('PS_OS_ERROR');
             $order->setCurrentState($payment_status);
             $order->update();
+            if(isset($office) && !empty($office)) {
+                header("Location:".$office);
+                exit;
+            }
             Tools::redirect($this->context->link->getModuleLink($this->module->name, 'failure'));
             exit();
         }
@@ -49,6 +62,10 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
             $payment_status = Configuration::get('PS_OS_ERROR');
             $order->setCurrentState($payment_status);
             $order->update();
+            if(isset($office) && !empty($office)) {
+                header("Location:".$office);
+                exit;
+            }
             Tools::redirect($this->context->link->getModuleLink($this->module->name, 'failure'));
             exit();
         }
@@ -65,12 +82,20 @@ class EsewaStatusCheckModuleFrontController extends ModuleFrontController
             /**
              * The order has been placed so we redirect the customer on the confirmation page.
              */
+            if(isset($office) && !empty($office)) {
+                header("Location:".$office);
+                exit;
+            }
             Tools::redirect('index.php?controller=order-confirmation&id_cart=' . (int)$cart_id . '&id_module=' . (int)$this->module->id . '&id_order=' . $order_id . '&key=' . $secure_key);
         
         } else {
             /*
              * An error occured and is shown on a new page.
              */
+            if(isset($office) && !empty($office)) {
+                header("Location:".$office);
+                exit;
+            }
             return $this->setTemplate('module:esewa/views/templates/front/error.tpl');
         }
     }

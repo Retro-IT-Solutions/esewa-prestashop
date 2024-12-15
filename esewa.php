@@ -128,7 +128,7 @@ class Esewa extends PaymentModule
         $existing_row = $db->getValue('SELECT id_esewa FROM `' . _DB_PREFIX_ . 'esewa` WHERE cart_id = ' . (int)$cart_id);
 
 
-        if ($existing_row && $order_status_id == Configuration::get('PS_CHECKOUT_STATE_PENDING')) {
+        if ($existing_row && $order_status_id == Configuration::get('PS_OS_BANKWIRE') || $order_status_id == Configuration::get('PS_OS_ERROR')) {
             $office_link = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
             $status_check_url = $this->context->link->getModuleLink($this->name, 'StatusCheck', array('order_id' => $order_id, 'office' => $office_link));
 

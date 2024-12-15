@@ -67,7 +67,7 @@ class EsewaPaymentModuleFrontController extends ModuleFrontController
 
         $this->module->validateOrder(
             $cart_id,
-            Configuration::get('PS_CHECKOUT_STATE_PENDING'),
+            Configuration::get('PS_OS_BANKWIRE'),
             $cart->getOrderTotal(),
             $this->module->displayName,
             "Paid with eSewa.",
